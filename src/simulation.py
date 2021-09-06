@@ -2,43 +2,58 @@ import sys
 import typing
 import datetime
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
+import src.data as data
+import src.outlet as outlet
 import src.reservoir as reservoir
-import src.operations as operations
 
-class Input:
-    def __init__(self, date: datetime, volume: float, maps: typing.Dict[str, float] = None):
-        self._volume = volume
-        self._date = date
-        self._maps = maps
+import src.operations as operations
+import src.utilities as utilities
+
+                       
+# def simulate(inputs: typing.List[inputs.Input], s_init: float = 0, 
+#              res: reservoir.Reservoir = reservoir.Reservoir(), 
+#              ops: typing.Callable[[reservoir.Reservoir, float, float], typing.Dict[str, float]] = operations.set_release.standard_operating_proceedure) -> pd.DataFrame:
+#     vol: float = s_init
+#     for i in range(0, len(inputs)):
+#         # have to calculate demand - but how in a flexible manner?
+#         releases = ops(res, vol, )
+
+class Simulation:
+    def __init__(self, inputs: typing.List[data.Input],
+                 reservoir: reservoir.Reservoir = reservoir.Reservoir(),
+                 ops: typing.Callable[[data.Input, typing.List[outlet.Outlet]], typing.Dict[str, float]] = operations.passive_operations):
+        self._inputs = inputs
+        self._reservoir = reservoir
+        self._f_operations = ops
         
     @property
-    def date(self):
-        return self._date
+    def inputs(self) -> typing.List[data.Input]:
+        return self._inputs
     @property
-    def volume(self):
-        return self._volume
-    @property
-    def maps(self):
-        return self._maps
-   
-    @staticmethod
-    def create_inputs(volumes: typing.List[float], dates: typing.List[float] = None, timedelta: datetime.timedelta = None, maps: typing.List[typing.Dict[str, float]] = None):
-        inputs: typing.List[Input] = []
-        create_dates: bool = True if dates == None else False 
-        timedelta = timedelta if timedelta != None else datetime.timedelta(days = 1)
-        for i in range(0, len(volumes)):
-            _map = None if maps == None else maps[i]
-            _date = datetime.datetime(datetime.MINYEAR, 1, 1) + timedelta * i if create_dates else dates[i] 
-            inputs.append(Input(_date, volumes[i], _map))
-        return inputs
-                      
-def simulate(inputs: typing.List[Input], s_init: float = 0, 
-             res: reservoir.Reservoir = reservoir.Reservoir(), 
-             ops: typing.Callable[[reservoir.Reservoir, float, float], typing.Dict[str, float]] = operations.set_release.standard_operating_proceedure) -> pd.DataFrame:
-    vol: float = s_init
-    for i in range(0, len(inputs)):
-        # have to calculate demand - but how in a flexible manner?
-        releases = ops(res, vol, )
+    def reservoir(self) -> reservoir.Reservoir:
+        return self._reservoir
+    # @property
+    # def f_operations(self) -> typing.Callable[[data.Input, typing.List[outlet.Outlet]], typing.Dict[str, float]]:
+    #     return self._f_operations
+    
+    def operations(self, input: data.Input, outlets: typing.List[outlet.Outlet]) -> typing.Dict[str, float]:
+        return self._f_operations(input, outlets)
+    
+    def simulate(self) -> pd.DataFrame:
+        n = len(self.inputs)
+        outflows = []
+        outflow: typing.Dict[str, typing.List[float]] = {}
+        for i in range(n):
+            release: typing.Dict[str, float] = self.operations(self.inputs[i], self.reservoir.outlets)
+            outflow.update({ k: outflow[k] + [v] if k in outflow else [v] for k, v in release.items()})
+            if not i + 1 == n:
+                if self.inputs[i + 1].update_storage:
+                    self.inputs[i + 1].storage = self.inputs[i].storage + self.inputs[i].inflow - sum(release.values())
+            outflows.append(outflow)
+        return outflows
+            
+             

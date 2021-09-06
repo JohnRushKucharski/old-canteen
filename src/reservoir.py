@@ -141,6 +141,14 @@ class Reservoir:
     def errors(self) -> typing.List[str]:
         return self._errors  
     
+    def select_outlets(self, names: typing.List[str]) -> typing.List[str]:
+        lst = []
+        for name in names:
+            lst.append([x for x in self.outlets if x.name == name])
+        return lst
+    def select_outlet(self, name: str) -> Outlet:
+        return [x for x in self.outlets if x.name == name][0]
+    
     def f(self, key: str, volume: float) -> float:
         '''
         Calls the function for a named variable that maps volume to the named variable, based on the provided name key and volume.
@@ -164,7 +172,7 @@ class Reservoir:
         plt.legend(frameon=False)
         plt.show()     
               
-    def print(self, digits = 0):
+    def print(self, digits: int = 0) -> str:
         '''
         Prints a string representation of the Reservoir object.
         

@@ -396,7 +396,7 @@ def f_interpolate_from_data(xs: typing.List[float], ys: typing.List[float], inte
         else:
             if x < xs[0]:
                 return extrapolate_lo if extrapolate_lo != None else np.nan
-            else:
+            else: # since its not on range it must be x > x[1]
                 return extrapolate_hi if extrapolate_hi != None else np.nan
     return inner    
 #endregion

@@ -25,6 +25,9 @@ sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
 import src.utilities as utilities
 #endregion
 
+
+
+
 # %%
 class Outlet:
     '''
@@ -81,3 +84,16 @@ class Outlet:
             A string in the format: name(location: value, max_release: value)
         '''
         return f'{self.name}(location: {round(self.location, digits)})'
+
+def select_outlets(names: typing.List[str], outlets: typing.List[Outlet]) -> typing.List[str]:
+    items = set()
+    for name in names:
+        items.update([x for x in outlets if x.name == name])
+    return list(items)
+def deselect_outlets(names: typing.List[str], outlets: typing.List[Outlet]) -> typing.List[str]:
+    items = set()
+    for name in names:
+        items.update([x for x in outlets if x.name != name])
+    return list(items)
+def select_outlet(name: str, outlets: typing.List[Outlet]) -> Outlet:
+    return [x for x in outlets if x.name == name][0]

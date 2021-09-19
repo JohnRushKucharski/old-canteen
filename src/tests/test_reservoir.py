@@ -127,6 +127,8 @@ class Test_Reservoir(unittest.TestCase):
             return volume + 1
         obj = reservoir.Reservoir(maps={reservoir.Map('simple', simple), reservoir.Map('simpleplus1', simpleplus1)})
         print_line = f'default(capacity: 1, outlets: [spill(location: 1)], mapped variables: '
-        var1, var2 = '[simple, simpleplus1])', '[simplplus1, simple])'
-        is_valid = True if obj.print() == (print_line + var1) or obj.print() == (print_line + var2) else False
-        self.assertTrue(is_valid)
+        var1, var2 = '[simple, simpleplus1])', '[simpleplus1, simple])'
+        # z = obj.print()
+        # is_valid = True if obj.print() == (print_line + var1) or obj.print() == (print_line + var2) else False
+        self.assertEqual(obj.print(), f'{print_line}{var2}')
+        #self.assertTrue(is_valid)

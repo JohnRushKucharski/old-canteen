@@ -31,7 +31,7 @@ class Test_Simulation(unittest.TestCase):
             data.Input(datetime.datetime(2021, 9, 12), 10)
         ]
         s = simulation.Simulation(ins)
-        self.assertDictEqual(s.input_to_dict(), { 'date': [i.date.strftime("%d %b %Y") for i in ins], 'inflow': [10, 10, 10], 'storage': [np.NaN, np.NaN, np.NaN]})
+        self.assertDictEqual(s.inputs_to_dict(), { 'date': [i.date.strftime("%d %b %Y") for i in ins], 'inflow': [10, 10, 10], 'storage': [np.NaN, np.NaN, np.NaN]})
     def test_input_to_dict_3plusonewitheadditionalinput(self):
         ins = [
             data.Input(datetime.datetime(2021, 9, 10), 10),
@@ -39,7 +39,7 @@ class Test_Simulation(unittest.TestCase):
             data.Input(datetime.datetime(2021, 9, 12), 10)
         ]
         s = simulation.Simulation(ins)
-        act = s.input_to_dict()
+        act = s.inputs_to_dict()
         exp = { 'date': [i.date.strftime("%d %b %Y") for i in ins], 'inflow': [10, 10, 10], 'storage': [np.nan, np.nan, np.nan], 'temp': [np.nan, 72, np.nan]}
         t = act == exp
         self.assertEqual(print(act), print(exp)) #for some dumb reasons self.assertDictEquals fails even though they are the same.

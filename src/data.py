@@ -51,11 +51,12 @@ class Input:
         return self._storage
     @storage.setter
     def storage(self, storage: float) -> None:
-        isvalid, exception = utilities.is_on_range(storage, 0, np.inf, 'storage', 'Input.storage() setter')
-        if not isvalid:
-            raise exception
-        else:
-            self._storage = storage
+        self._storage = storage
+        # isvalid, exception = utilities.is_on_range(storage, 0, np.inf, 'storage', 'Input.storage() setter')
+        # if not isvalid:
+        #     raise exception
+        # else:
+        #     self._storage = storage
     @property 
     def update_storage(self) -> bool:
         return self._update_storage

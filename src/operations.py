@@ -143,6 +143,8 @@ def passive_operations(input: data.Input, outlets: typing.List[outlet.Outlet]) -
     return releases
         
 
+
+
 # #region Wilson Example
 # def surcharge_release(input: input.Input):
 #     pass 

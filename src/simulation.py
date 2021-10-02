@@ -68,32 +68,54 @@ class Simulation:
     def additional_outputs(self) -> Dict[str, Additional_Output]:
         return self._additional_ouputs
     
-    def operations(self, input: data.Input, outlets: List[outlet.Outlet]) -> Dict[str, float]:
-        return self._f_operations(input, outlets)
+    def operations(self, input: data.Input, outlets: List[outlet.Outlet], factor: float = 1) -> Dict[str, float]:
+        return self._f_operations(input, outlets, factor)
     
-    def simulate(self) -> Dict[str, List[Any]]:
+    def simulate(self):
         outputs = {}
         for t in range(len(self.inputs)):
-            outflow: Dict[str, float] = self.add_outflows(input)
-            outflow.update(self.operations(self.inputs[t], self.reservoir.outlets))
-            outflow = self.add_outflows(self.inputs[t], outflow, Run_Order.BEFORE_STORAGE)
-            if t + 1 < len(self.inputs) and self.inputs[t + 1].update_storage: 
-                self.inputs[t + 1].storage = self.inputs[t].storage + self.inputs[t].inflow - sum(outflow.values())
-            output = self.add_outputs(self.inputs[t], outflow) if self.additional_outputs else outflow
-            outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in output.items()})
-            outflow.clear()
-            output.clear()
-        return self.input_to_dict() | outputs      
+            #_out = self.step_foward(t)
+            #output = self.inputs[t].to_dict() | self.step_foward(t)
+            outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in self.step_foward(t).items()})
+        return outputs
+    # def simulate(self) -> Dict[str, List[Any]]:
+    #     outputs = {}
+    #     for t in range(len(self.inputs)):
+    #         output: Dict[str, Any] = self.step_foward(t)
+    #         outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in output.items()})
+    #         # outflow: Dict[str, float] = self.add_outflows(self.input[t]) #input
+    #         # outflow.update(self.operations(self.inputs[t], self.reservoir.outlets))
+    #         # outflow = self.add_outflows(self.inputs[t], outflow, Run_Order.BEFORE_STORAGE)
+    #         # if t + 1 < len(self.inputs) and self.inputs[t + 1].update_storage: 
+    #         #     self.inputs[t + 1].storage = self.inputs[t].storage + self.inputs[t].inflow - sum(outflow.values())
+    #         # output = self.add_outputs(self.inputs[t], outflow) if self.additional_outputs else outflow
+    #         # outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in output.items()})
+    #         # outflow.clear()
+    #         # output.clear()
+    #     return self.inputs_to_dict() | outputs 
+    
+    def step_foward(self, t: int, factor: int = 1) -> Dict[str, Any]:
+        outflow: Dict[str, float] = self.add_outflows(self.inputs[t]) #input
+        release: Dict[str, float] = self.operations(self.inputs[t], self.reservoir.outlets, factor)
+        release['total_release'] = sum(release.values())
+        outflow.update(release)
+        outflow = self.add_outflows(self.inputs[t], outflow, Run_Order.BEFORE_STORAGE)
+        if t + 1 < len(self.inputs) - 1 and self.inputs[t + 1].update_storage:
+            self.inputs[t + 1].storage = self.inputs[t].storage + self.inputs[t].inflow - outflow['total_release']        
+        output = self.add_outputs(self.inputs[t], outflow) if self.additional_outputs else outflow
+        return self.inputs[t].to_dict() | output
+        
+     
     def add_outflows(self, input: data.Input, outflow: Dict[str, float] = {}, run_order = Run_Order.BEFORE_OPERATIONS) -> Dict[str, float]: 
         for k, v in self.additional_outputs.items():
-            if v.run_order == run_order and v.is_outflow: outflow[k] = v.run(input)
+            if v.run_order == run_order and v.is_outflow: outflow.update({f'{k}_{label}': val for label, val in v.run(input).items()}) #outflow[k] = v.run(input)
         return outflow
     def add_outputs(self, input: data.Input, output: Dict[str, Any] = {}):
         for k, v in self.additional_outputs.items():
-            if not v.is_outflow: output[k] = v.run(input)
-        return output  
+            if not v.is_outflow: output.update({f'{k}_{label}': val for label, val in v.run(input).items()}) #output[k] = v.run(input)
+        return output                 
             
-    def input_to_dict(self):    
+    def inputs_to_dict(self):    
         d = { k: np.full(len(self.inputs), np.nan).tolist() for k, _ in self.inputs[0].to_dict().items()}
         for i in range(0, len(self.inputs)):
             for k, v in self.inputs[i].to_dict().items():
@@ -104,3 +126,9 @@ class Simulation:
                     l[i] = v
                     d[k] = l
         return d
+    def simulate_to_dataframe(self):
+        outputs = self.simulate()
+        df = pd.DataFrame.from_dict(outputs)
+        df.set_index(pd.to_datetime(df.date), inplace = True)
+        df.drop(columns=['date'], inplace = True)
+        return df

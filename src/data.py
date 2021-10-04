@@ -1,11 +1,25 @@
-import enum
-import typing
+#region Header
+# %% [markdown]
+# # Input
+#
+# Author: John Kucharski | Date: 28 August 2021
+#
+# Status: open
+# Testing: partial
+
+#%%
+#TODO: #2 Add Factories
+#TODO: #4 Output Objects
+#endregion
+
+#region Dependencies
+#%%
 import datetime
+from typing import List, Dict, Union, Any 
+import numpy as np        
+#endregion
 
-import numpy as np
-
-import src.utilities as utilities
-
+#%%
 class Additional_Input:
     '''
     Provide a class for storing non-standard input variables (for example: temperature).
@@ -13,12 +27,12 @@ class Additional_Input:
     Notes: inputs can labeled as mutable [update = True] or imutable [update = False].
     Some inputs are also operational outputs (i.e., reservoir releases), marking these variables as outputs [output = True] will repress them from being printed to dictionaries and dataframes.
     '''
-    def __init__(self, value: typing.Any = np.nan, update: bool = True, output = False):
+    def __init__(self, value: Any = np.nan, update: bool = True, output = False):
         self._value = value
         self._update = update
         self._output = output
     @property
-    def value(self) -> typing.Any:
+    def value(self) -> Any:
         return self._value
     @property
     def update(self) -> bool:
@@ -31,9 +45,10 @@ class Additional_Input:
         def mutablity_tag(x: bool) -> str:
             return 'm' if self.update else 'im'
         return f'{round(self.value, digits)} [{mutablity_tag(self.update)}]' 
-    
+
+#%%    
 class Input:
-    def __init__(self, date: datetime.date, inflow: float, storage: float = np.nan, update_storage: bool = True, additional_inputs: typing.Union[typing.Dict[str, Additional_Input], None] = None) -> None:
+    def __init__(self, date: datetime.date, inflow: float, storage: float = np.nan, update_storage: bool = True, additional_inputs: Union[Dict[str, Additional_Input], None] = None) -> None:
         self._date = date
         self._inflow = inflow
         self._storage = storage
@@ -61,7 +76,7 @@ class Input:
     def update_storage(self) -> bool:
         return self._update_storage
     @property
-    def additional_inputs(self) -> typing.Union[typing.Dict[str, Additional_Input], None]:
+    def additional_inputs(self) -> Union[Dict[str, Additional_Input], None]:
         return self._additional_inputs
    
     def print(self, digits: int = 0) -> str:
@@ -71,7 +86,7 @@ class Input:
             return 'none' if self.additional_inputs is None else { k: v.print(digits) for k, v in self.additional_inputs.items() }
         return f'{self.date.strftime("%d %b %Y")} (inflow: {round(self.inflow)}, storage: {print_storage()}, additional inputs: {print_additionalinputs()})'
     
-    def to_dict(self) -> typing.Dict[str, typing.Any]:
+    def to_dict(self) -> Dict[str, Any]:
         base = {
             'date': self.date.strftime("%d %b %Y"),
             'inflow': self.inflow,
@@ -84,5 +99,9 @@ class Input:
             return base | add
     
     @staticmethod
-    def inputs_factory(dates: typing.List[datetime.date], inflows: typing.List[float], storages: typing.List[float], update_storage: bool, additional_inputs: typing.List[typing.Union[typing.Dict[str, Additional_Input], None]]):
+    def inputs_factory(dates: List[datetime.date], inflows: List[float], storages: List[float], update_storage: bool, additional_inputs: List[Union[Dict[str, Additional_Input], None]]):
         return [Input(dates[i], inflows[i], storages[i], update_storage, additional_inputs[i]) for i in range(len(dates))]
+    
+    @staticmethod
+    def inputs_from_csv(path: str):
+        pass

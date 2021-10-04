@@ -1,34 +1,63 @@
-import abc
+#region Header
+# %% [markdown]
+# # Reservoir
+#
+# Author: John Kucharski | Date: 28 June 2021
+#
+# Status: open
+# Testing: partial
+
+# testing todos listed on methods below.
+#endregion
+
+#region Dependencies
+#%%
 import sys
-import enum
-import typing
-import dataclasses
+from enum import Enum
+from typing import List, Dict, Tuple, Callable, Any, Protocol
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
 import datetime
 
 import numpy as np
 
 sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
-import src.data as data
-import src.outlet as outlet
-import src.reservoir as reservoir
+from src.data import Input
+from src.outlet import Outlet
 import src.utilities as utilities
+#endregion
 
-#region Operational Zones
-class Zone(enum.Enum):
+#%%
+class Zone(Enum):
     INACTIVE = 0
     CONSERVATION = 1
     FLOOD = 2
     SURCHARGE = 3
     TOP_OF_DAM = 4
 
-#region Operations (Reservoir Volume) Targets 
+class Operations(Protocol):
+    '''
+    Provides an interface for classes used to define reservoir operations.
+    '''
+    def operate(input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+        '''
+        A function used to operate the reservoir, and required by Simulation objects.
+        
+        Args:
+            Input [data.Input]: data inputs for a single timestep
+            outlets [List[Outlet]]: outlets from which releases are made
+            
+        Returns:
+            A Dict[str, float] with reservoir releases (values) labeled with the Outlet.name from which they are made (key).
+        '''
+
 class Rule_Curve:
     '''
     This class is used to define target volumes for reservoirs based on the day of the water year.
     '''
-    def __init__(self, date_target_pairs: typing.List[typing.Tuple[datetime.date, float]], leap_year: bool = False, 
-                 interpolator: typing.Callable[[typing.List[float], typing.List[float]], typing.List[float]] = np.interp) -> None:
+    def __init__(self, date_target_pairs: List[Tuple[datetime.date, float]], leap_year: bool = False, 
+                 interpolator: Callable[[List[float], List[float]], List[float]] = np.interp) -> None:
         '''Initializes the Rule_Curve class 
         Args:
             date_target_pairs (List[Tuple[date, float]]): list of paired (dates, target volume: float) rules.
@@ -49,7 +78,7 @@ class Rule_Curve:
         self._targets = [ j for _, j in self.day_of_water_year_target_pairs]
         self._is_valid, self._messages = self.__validate_rules()
     
-    def __validate_rules(self) -> typing.Tuple[bool, typing.List[str]]:
+    def __validate_rules(self) -> Tuple[bool, List[str]]:
         is_valid, errors = True, []
         for i in range(len(self.day_of_water_year_target_pairs)):
             valid_day, error_day = utilities.is_on_range(self.days[i], 1, self.end_of_water_year, 'rule day_of_the_water_year', 'RuleCuve.__validate_rules()')
@@ -65,19 +94,19 @@ class Rule_Curve:
         return is_valid, errors
     
     @property
-    def date_target_pairs(self) -> typing.List[typing.Tuple[datetime.datetime, float]]:
+    def date_target_pairs(self) -> List[Tuple[datetime.datetime, float]]:
         '''Returns datetime, target volume pairs.'''
         return self._date_target_pairs       
     @property
-    def day_of_water_year_target_pairs(self) -> typing.List[typing.Tuple[int, float]]:
+    def day_of_water_year_target_pairs(self) -> List[Tuple[int, float]]:
         '''Returns day of water year, target volume pairs.'''
         return self._day_of_water_year_target_pairs
     @property
-    def days(self) -> typing.List[int]:
+    def days(self) -> List[int]:
         '''Returns the days of the water year contained in the rules attributes.'''
         return self._days
     @property
-    def targets(self) -> typing.List[float]:
+    def targets(self) -> List[float]:
         '''Returns the target volumes containing in the rules attributes.'''
         return self._targets
     @property
@@ -113,199 +142,91 @@ class Rule_Curve:
                         xs, ys = [self.days[i - 1], self.days[i]], [self.targets[i - 1], self.targets[i]]
                         break
             return self._interpolator(dowy, xs, ys)
-#endregion
+    def operate(self, input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+        '''
+        Makes release to achieve a target elevation based on the input storage and inflow, subject to constraints posed by the outlets.
+        
+        Args:
+            input [Input]: data inputs used for operational rules
+            outlets [List[Outlet]]: outlets from which releases are made.
+        Returns:
+            A Dict[str, float] with releases (values) labeled according the Outlet.name from which they are made.
+        ''' 
+        # TODO: #8 Test Rule_Cuve.operate() function
+        releases = {}
+        outlets.sort(key=lambda x: x.location)
+        dowy: int = utilities.datetime_to_dowy(input.date)
+        storage, release = input.storage + input.inflow, 0
+        target_release: float = input.storage + input.inflow - self.target_volume(dowy) 
+        for outlet in outlets:
+            if target_release > 0 and storage > 0:
+                release = min(target_release, outlet.max_release)
+                releases[outlet.name] = release
+                storage = storage - release
+            else:
+                releases[outlet.name] = 0
+        return releases
 
-#region Operations   
-class Operations(abc.ABC):
-    def __init__(self, rules: typing.List[typing.Callable[[data.Input], float]]):
+@dataclass
+class Rules(ABC):
+    '''
+    A Operations class that holds a set of rules with the same signature as the operate function.
+    '''
+    def __init__(self, rules: List[Callable[[Input, Outlet], Dict[str, float]]]):
         self._rules = rules
-   
-    @abc.abstractproperty
-    def rules(self):
+    
+    @property
+    def rules(self) -> List[Callable[[Input, Outlet], Dict[str, float]]]:
         return self._rules
+    @rules.setter
+    def rules(self, rule: Callable[[Input, Outlet], Dict[str, float]]) -> None:
+        self._rules.append(rule)        
     
-    @abc.abstractmethod
-    def operate(self, input: data.Input, outlets: typing.List[outlet.Outlet]) -> typing.Dict[str, float]: 
-        pass  
+    @abstractmethod
+    def operate(self, input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+        pass
+                
+def passive_operations(input: Input, outlets: List[Outlet], factor: float = 1) -> Dict[str, float]:
+    '''
+    An operations policy that makes the maximum possible release given the storage, inflows (from the input argument) given contraints posed by the outlets.
     
-    def __update_releases(previous: float, new: typing.Dict[str, float]) -> float:
-        return previous + sum(new.values())    
-#endregion
-
-def passive_operations(input: data.Input, outlets: typing.List[outlet.Outlet]) -> typing.Dict[str, float]:
+    Args: 
+        input [Input]: data inputs for the operations.
+        outlets [List[Outlet]]: a list of reservoir outlets from which releases are made.
+    Return:
+        A Dict[str, float] releases (values) listed according to the Outlet.name (key) from which they are made.
+    '''
     releases = {}
     outlets.sort(key=lambda x: x.location)
-    s, r = input.storage + input.inflow, 0
-    for x in outlets:
-        r += x.max_release(s)
-        releases[x.name] = r
-        s -= r
+    stored, released = input.storage + input.inflow, 0
+    for outlet in outlets:
+        released += outlet.max_release(stored)
+        releases[outlet.name] = released
+        stored = stored - released
     return releases
         
-
-
-
-# #region Wilson Example
-# def surcharge_release(input: input.Input):
-#     pass 
-# def minimum_release(input: input.Input) -> float:
-#     yr: int = input.date.year
-#     # date between 1 Jan - 1 Apr
-#     if input.date < datetime.datetime(yr, 4, 1):
-#         return 5
-#     # date between 1 Apr - 1 Oct
-#     elif input.date < datetime.datetime(yr, 10, 1): 
-#         return 15
-#     # date between 1 Oct - 1 Jan (redundant but matches Excel example)
-#     else:
-#         return 5
-# def epks_release(input: input.Input) -> float:
-#     ratio: float = input.additional_inputs['epks']
-#     isvalid, exception = utilities.is_on_range(ratio, 1, 4, 'Input.additional_inputs[epks]', 'epks_release()')
-#     if isvalid:
-#         if ratio < 2:
-#             return 11000
-#         elif ratio < 3:
-#             return 18000
-#         else: #ratio < 4
-#             return 25000        
-#     else:
-#         raise exception
-# def nwck_release(input: input.Input) -> float:
-#     ratio: float = input.additional_inputs['nwck']
-#     isvalid, exception = utilities.is_on_range(ratio, 1, 4, 'Input.additional_inputs[nwck]', 'nwck_release()')
-#     if isvalid:
-#         if ratio < 2:
-#             return 6000
-#         elif ratio < 3:
-#             return 10000
-#         else: #ratio < 4
-#             return 12000        
-#     else:
-#         raise exception
-# def tstk_release(input: input.Input) -> float:
-#     ratio: float = input.additional_inputs['tstk']
-#     isvalid, exception = utilities.is_on_range(ratio, 1, 4, 'Input.additional_inputs[tstk]', 'tstk_release()')
-#     if isvalid:
-#         if ratio < 2:
-#             return 2600
-#         elif ratio < 3:
-#             return 4300
-#         else: #ratio < 4
-#             return 4700        
-#     else:
-#         raise exception
-# def wiln_release(input: input.Input) -> float:
-#     ratio: float = input.additional_inputs['tstk']
-#     isvalid, exception = utilities.is_on_range(ratio, 1, 4, 'Input.additional_inputs[tstk]', 'tstk_release()')
-#     if isvalid:
-#         if ratio < 1.3:
-#             return 15
-#         elif ratio < 2:
-#             return 1200
-#         elif ratio < 3:
-#             return 1600
-#         else: #ratio < 4
-#             return 2250
-#     else:
-#         raise exception
+def standard_operating_proceedures(input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+    '''
+    Implements standard operationg proceedure reservoir operations rules, meaning the demanded water is released, provided it is available as storage + inflow.
+    NOTE: requires demand and reservoir capacity be listed in the inputs argument as input.additional_inputs under the keys: ['demand', 'capacity']
     
-# rule_1 = minimum_release
-# rule_2 = epks_release
-# rule_3 = nwck_release
-# rule_4 = tstk_release
-# rule_5 = wiln_release
-# rules = [rule_1, rule_2, rule_3, rule_4, rule_5]
-    
-# class Wilson_Operations(Operations):
-#     def __init__(self, 
-#                  rules: typing.List[typing.Callable[[input.Input, typing.List[outlet.Outlet]], typing.Dict[str, float]]],
-#                  active_zone: typing.Callable[[float], Zone])  -> None:
-#         self.active_zone = active_zone
-#         super().__init__(rules)
-#     def operate(self, input: input.Input, res: reservoir.Reservoir) -> float:
-        
-#         return max(rule_1[input], rule_2(input), rule_3(input), rule_4(input), rule_5(input))
-#endregion
-
-
-
-
-
-
-
-
-
-
-
-#region Release Rules 
-
-
-# class set_target_release:
-#     '''
-#     Provides static methods for constraining the release (to incorporate hedging rules, maximum safe flood releases, etc.) based the current and targeted volume.
-#     '''
-#     @staticmethod
-#     def add_max_and_min_rules(volume: float, target_volume: float, max: float = np.inf, min: float = 0):
-#         release: float = volume - target_volume if (volume - target_volume) < max else max
-#         return release if release > min else min
-
-# class set_release:
-#     @staticmethod
-#     def standard_operating_proceedure(res: reservoir.Reservoir, volume: float, demand: float = np.inf) -> typing.Dict[str, float]:
-#         releases = {}
-#         volume_released: float = 0
-#         target_release: float = demand if volume - demand <= res.capacity else volume - res.capacity
-#         for i in range(0, len(res.outlets)):
-#             if volume_released < target_release and res.outlets[i].location < volume:
-#                 release = min(target_release - volume_released, res.outlets[i].max_release(volume))
-#                 releases[res.outlets[i].name] = release
-#                 volume_released += release
-#                 volume -= release
-#             else:
-#                 releases[res.outlets[i].name] = 0
-#         return releases    
-
-#class Builder(abc.ABC):
-    #def add_rule_curve(self, date_volume: Tuple[datetime, float])
-    #def add_forecast(self, forecast)
-    #def add_objective(self, objective)
-    #def add_objectives(self, List-objective)
-
-# @dataclasses.dataclass
-# class Rules:
-#     rules: typing.List[typing.Callable] = []
-
-# class Operations:
-#     def __init__(self, rules: typing.List[typing.Callable] = [], releases: typing.List[typing.Callable] = []):
-#         self._rules = rules
-    
-#     @staticmethod
-#     def add_rule(fx: typing.Callable, description: str) -> None:
-        
-# class Operations:
-#     def __init__(self, target_fx, release_fx, outlets: typing.List[outlet.Outlet]) -> None:
-#         self._f_target = target_fx
-#         self._f_release = release_fx
-#         self._outlets = outlets
-    
-     
-          
-    
-
-    
-
-        
-                 
-# def validate_rule_curve(dowy: int, last_dowy: int,
-#                         rules: typing.List[typing.Tuple[int, float]],
-#                         interpolators: typing.List[typing.Callable[[typing.List[float], typing.List[float]], typing.List[float]]]) -> typing.Tuple[bool, str]:
-#     msgs: str = ''
-#     msgs += utilities.is_on_range(dowy, 1, last_dowy, 'day of water year (dowy)')[1]
-#     for rule in rules:
-#         msgs += utilities.is_on_range(rule[0], 1, last_dowy, 'rule day of water year')[1]
-#     return len(msgs) == 0, msgs
-    
-
-
-
+    Args:
+        input [Input]: data inputs for the operational rules. MUST include the input.additional_inputs: ['demand', 'capacity'].
+        outlets [List[Outlet]]: a list of outlets from which releases are made.
+    Returns:
+        A Dict[str, float]: listing releases (values) according to the Outlet.name (key) from which they are made.
+    '''
+    # TODO: #9 Test standard_operating_proceedures() function
+    releases = {}
+    stored, release = input.storage, 0
+    demand, capacity = input.additional_inputs['demand'], input.additional_inputs['capacity']
+    target = max(demand, stored - capacity) if capacity < stored else min(stored, demand)
+    outlets.sort(key=lambda x: x.location)
+    for outlet in outlets:
+        if target > 0:
+            release = min(demand, outlet.max_release(stored))
+            releases[outlet.name] = release
+            stored = stored - release
+        else:
+            releases[outlet.name] = release
+    return releases           

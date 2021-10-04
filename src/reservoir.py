@@ -6,14 +6,11 @@
 #
 # Status: open
 # Testing: partial
-#
-# todo:
-# * add as a network node
-# * state changes, broken gates
 
+# TODO: #7 State changes, broken gates
+#endregion
 
-# %% [markdown]
-# ## Dependencies
+# region Dependencies
 # %%
 import sys
 import typing
@@ -42,7 +39,6 @@ class Map:
         return self._f(volume)
     def inverse_f(self, y: float) -> float:
         return self._inverse_f(y)
-
 
 # %%
 class Reservoir:

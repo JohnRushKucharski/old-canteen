@@ -1,38 +1,51 @@
+#region Simulation
+# %% [markdown]
+# # Simulation
+# This file provides a data container for stuctures used to make releases from reservoirs.
+#
+# Author: John Kucharski | Date: 06 July 2021
+# 
+# Status: open to extension, closed to change [s*O*lid] :)
+# Testing: not done
+
+# TODO: #13 Store simulation results.
+#endregion
+
+#region Dependencies
 import sys
 
 import datetime
 from enum import Enum
+from dataclasses import dataclass
 from typing import List, Dict, Callable, Any
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
-import src.data as data
-import src.outlet as outlet
-import src.reservoir as reservoir
+from src.data import Input
+from src.outlet import Outlet
+from src.reservoir import Reservoir
 
 import src.operations as operations
 import src.utilities as utilities
-
+#endregion 
                        
-#TODO #1:
-# (1) Add optimize class (inherits simulation) 
-# (a) objectives = List[(str, symbol (<,>,=), value)] each str would be the name of a column of output (may want same string twice so a list not a dictionary),
-# (b) penalty = callable function loops over output from Simulation.simulate() and computes penalty at each time step.
-# (c) something like "levers" to modify operations? or just redefine operations?
-# * perhaps levers could multiple a rule's outflow by some value. This could be added to all the rules as a optional argument usually set to 1.
-# * i think these "levers" are "action names" in the PTreeOpt() init. The actual levers are in the PTreeOpt.f function in an if action_name == "action name" then pull lever style.
-# (d) something like "indicators", like flow or storage that say when to activate a lever. This is what the policy tree should find.
-# * I think indicators in the policy tree are called: features, and feature names on the PTreeOpt() init
-
+#%%
 class Run_Order(Enum):
+    '''
+    Describes the order in which an Additional_Output should be run.
+    '''
     BEFORE_OPERATIONS = 0,
     BEFORE_STORAGE = 1,
     AFTER_STORAGE = 2
 
 class Additional_Output:
-    def __init__(self, fn: Callable[[data.Input], Dict[str, Any]], is_outflow: bool = False, run_order: Run_Order = Run_Order.AFTER_STORAGE):
+    '''
+    Provides an ability to inject simulations with other output models.
+    '''
+    def __init__(self, fn: Callable[[Input], Dict[str, Any]], is_outflow: bool = False, run_order: Run_Order = Run_Order.AFTER_STORAGE):
         self._fn = fn
         self._is_outflow = is_outflow
         if is_outflow and run_order == Run_Order.AFTER_STORAGE: raise ValueError(f'The output is marked as an outflow. It must be run before storage calculations performed but is set to run after storage calculations.')
@@ -44,78 +57,83 @@ class Additional_Output:
     def is_outflow(self) -> bool:
         return self._is_outflow
     
-    def run(self, input: data.Input) -> Any:
+    def run(self, input: Input) -> Any:
         return self._fn(input)    
 
 class Simulation:
-    def __init__(self, inputs: List[data.Input],
-                 reservoir: reservoir.Reservoir = reservoir.Reservoir(),
-                 operations_fn: Callable[[data.Input, List[outlet.Outlet]], Dict[str, float]] = operations.passive_operations,
+    '''
+    A simulation contain that holds the inputs: List[Input], reservoir: Reservoir, and operate(): Callable[[Input, List[Outlet], Dict[str, float]] required to run a simualtion.
+    The simulate() function runs the simulation.
+    '''
+    def __init__(self, inputs: List[Input],
+                 reservoir: Reservoir = Reservoir(),
+                 operations_fn: Callable[[Input, List[Outlet]], Dict[str, float]] = operations.passive_operations,
                  additional_outputs: Dict[str, Additional_Output] = {}):
         self._inputs = inputs
         self._reservoir = reservoir
         self._f_operations = operations_fn
         self._additional_ouputs = additional_outputs
-        
-        
+           
     @property
-    def inputs(self) -> List[data.Input]:
+    def inputs(self) -> List[Input]:
         return self._inputs
     @property
-    def reservoir(self) -> reservoir.Reservoir:
+    def reservoir(self) -> Reservoir:
         return self._reservoir
     @property
     def additional_outputs(self) -> Dict[str, Additional_Output]:
         return self._additional_ouputs
     
-    def operations(self, input: data.Input, outlets: List[outlet.Outlet], factor: float = 1) -> Dict[str, float]:
+    def operations(self, input: Input, outlets: List[Outlet], factor: float = 1) -> Dict[str, float]:
+        '''
+        Calls the operations_fn stored as a class attribute.
+        '''
         return self._f_operations(input, outlets, factor)
     
     def simulate(self):
+        '''
+        Runs a simulation, using the class attribute: inputs, reservoir, operations_fn, and additional_outputs.
+        
+        Returns:
+            A Dict[str, Any]: containing the simulation inputs and outputs.
+        '''
         outputs = {}
         for t in range(len(self.inputs)):
-            #_out = self.step_foward(t)
-            #output = self.inputs[t].to_dict() | self.step_foward(t)
             outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in self.step_foward(t).items()})
         return outputs
-    # def simulate(self) -> Dict[str, List[Any]]:
-    #     outputs = {}
-    #     for t in range(len(self.inputs)):
-    #         output: Dict[str, Any] = self.step_foward(t)
-    #         outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in output.items()})
-    #         # outflow: Dict[str, float] = self.add_outflows(self.input[t]) #input
-    #         # outflow.update(self.operations(self.inputs[t], self.reservoir.outlets))
-    #         # outflow = self.add_outflows(self.inputs[t], outflow, Run_Order.BEFORE_STORAGE)
-    #         # if t + 1 < len(self.inputs) and self.inputs[t + 1].update_storage: 
-    #         #     self.inputs[t + 1].storage = self.inputs[t].storage + self.inputs[t].inflow - sum(outflow.values())
-    #         # output = self.add_outputs(self.inputs[t], outflow) if self.additional_outputs else outflow
-    #         # outputs.update({ k: outputs[k] + [v] if k in outputs else [v] for k, v in output.items()})
-    #         # outflow.clear()
-    #         # output.clear()
-    #     return self.inputs_to_dict() | outputs 
-    
-    def step_foward(self, t: int, factor: int = 1) -> Dict[str, Any]:
+
+    def step_foward(self, t: int, factor: float = 1) -> Dict[str, Any]:
+        '''
+        Executes a single timestep in the simulation, is called by the simulate() function.
+        
+        Args:
+            t [int]: the simulation timestep
+            factor [float]: needs to be edited, allows for optimizaiton at the moment.
+        '''
+        #TODO: #12 Remove optimization 'factor's from simulation and operations logic.
         outflow: Dict[str, float] = self.add_outflows(self.inputs[t]) #input
         release: Dict[str, float] = self.operations(self.inputs[t], self.reservoir.outlets, factor)
         release['total_release'] = sum(release.values())
         outflow.update(release)
         outflow = self.add_outflows(self.inputs[t], outflow, Run_Order.BEFORE_STORAGE)
-        if t + 1 < len(self.inputs) - 1 and self.inputs[t + 1].update_storage:
+        if t + 1 < len(self.inputs) and self.inputs[t + 1].update_storage:
             self.inputs[t + 1].storage = self.inputs[t].storage + self.inputs[t].inflow - outflow['total_release']        
         output = self.add_outputs(self.inputs[t], outflow) if self.additional_outputs else outflow
-        return self.inputs[t].to_dict() | output
-        
+        return self.inputs[t].to_dict() | output 
      
-    def add_outflows(self, input: data.Input, outflow: Dict[str, float] = {}, run_order = Run_Order.BEFORE_OPERATIONS) -> Dict[str, float]: 
+    def add_outflows(self, input: Input, outflow: Dict[str, float] = {}, run_order = Run_Order.BEFORE_OPERATIONS) -> Dict[str, float]: 
         for k, v in self.additional_outputs.items():
             if v.run_order == run_order and v.is_outflow: outflow.update({f'{k}_{label}': val for label, val in v.run(input).items()}) #outflow[k] = v.run(input)
         return outflow
-    def add_outputs(self, input: data.Input, output: Dict[str, Any] = {}):
+    def add_outputs(self, input: Input, output: Dict[str, Any] = {}):
         for k, v in self.additional_outputs.items():
             if not v.is_outflow: output.update({f'{k}_{label}': val for label, val in v.run(input).items()}) #output[k] = v.run(input)
         return output                 
             
-    def inputs_to_dict(self):    
+    def inputs_to_dict(self):
+        '''
+        Converts the simulation inputs (class attribute) to a dictionary.
+        '''    
         d = { k: np.full(len(self.inputs), np.nan).tolist() for k, _ in self.inputs[0].to_dict().items()}
         for i in range(0, len(self.inputs)):
             for k, v in self.inputs[i].to_dict().items():
@@ -126,9 +144,26 @@ class Simulation:
                     l[i] = v
                     d[k] = l
         return d
-    def simulate_to_dataframe(self):
+    def simulate_to_dataframe(self) -> pd.DataFrame:
+        '''
+        Calls the simulate() function but returns the output as a DataFrame instead of a dictionary.
+        '''
         outputs = self.simulate()
         df = pd.DataFrame.from_dict(outputs)
         df.set_index(pd.to_datetime(df.date), inplace = True)
         df.drop(columns=['date'], inplace = True)
         return df
+    
+    def plot(self, df: pd.DataFrame):
+        fig, ax = plt.subplots(nrows = 2, ncols=1, sharex=True, sharey=True, figsize=(10, 5))
+        plt.suptitle('Simulation Summary Ouputs')
+        ax[0].set_title('inflows and storage')
+        ax[0].set_ylabel('volume')
+        ax[0].step(df.index, df.inflow, where='pre', color='cornflowerblue', linestyle='dashed', label='inflow')
+        ax[0].step(df.index, df.storage, where='post', color='blue', linestyle='solid', label='storage')
+        ax[1].set_title('outflows')
+        ax[1].set_xlabel('date')
+        ax[1].set_ylabel('volume')
+        ax[1].step(df.index, df.total_release, where='post', color='darkorchid', linestyle='solid', label='outflow')
+        fig.legend(frameon=False)
+        

@@ -6,9 +6,9 @@
 # 
 # Status: open 
 # Testing: n/a
+#endregion
 
-# %% [markdown]
-# ## Dependencies
+#region Dependencies
 # %%
 import sys
 import unittest
@@ -20,6 +20,7 @@ sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
 import src.data as data
 #endregion
 
+#%%
 class Test_Data(unittest.TestCase):
     def test_print_for_default_input(self):
         test_obj = data.Input(datetime.datetime(2021, 8, 28), 10)

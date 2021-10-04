@@ -6,9 +6,9 @@
 # 
 # Status: open 
 # Testing: n/a
+#endregion
 
-# %% [markdown]
-# ## Dependencies
+#region Dependencies
 # %%
 import sys
 import unittest
@@ -23,6 +23,7 @@ import src.operations as ops
 import src.data as data
 #endregion
 
+#%%
 class Test_Operations(unittest.TestCase):  
     #region Rule_Curve class tests
     def test_Rule_Curve_rules_sorted(self):

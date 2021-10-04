@@ -8,13 +8,11 @@
 # Status: open to extension, closed to change [s*O*lid] :)
 # Testing: mostly done
 
-# %% [markdown]
-# todo:
-# * active/inactive boolean switch? note this would introduce a mutable state
-# * release(volume: float) -> float method? for tainter gates, weirs etc.
+# TODO: #10 Active/inacive boolean switch
+# TODO: #11 Test if max_release(volume) function allows for tainter gate like releases.
+#endregion
 
-# %% [markdown]
-# Dependencies
+# region Dependencies
 # %%
 import sys
 import typing
@@ -24,9 +22,6 @@ import numpy as np
 sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
 import src.utilities as utilities
 #endregion
-
-
-
 
 # %%
 class Outlet:

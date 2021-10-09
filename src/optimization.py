@@ -84,8 +84,8 @@ class Optimization:
             #print(output)
         return sum(penalties)
           
-    def indicator_states(self, output):
-        states = []
+    def indicator_states(self, output: Dict[str, Any]) -> List[Any]:
+        states: List[Any] = []
         for k, _ in self.indicators.items():
             states.append(output[k])
         return states 

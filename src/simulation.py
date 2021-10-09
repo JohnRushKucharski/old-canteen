@@ -90,12 +90,12 @@ class Simulation:
         '''
         return self._f_operations(input, outlets, factor)
     
-    def simulate(self):
+    def simulate(self) -> Dict[str, List[Any]]:
         '''
         Runs a simulation, using the class attribute: inputs, reservoir, operations_fn, and additional_outputs.
         
         Returns:
-            A Dict[str, Any]: containing the simulation inputs and outputs.
+            A Dict[str, List[Any]]: containing the simulation inputs and outputs.
         '''
         outputs = {}
         for t in range(len(self.inputs)):
@@ -159,7 +159,7 @@ class Simulation:
         plt.suptitle('Simulation Summary Ouputs')
         ax[0].set_title('inflows and storage')
         ax[0].set_ylabel('volume')
-        ax[0].step(df.index, df.inflow, where='pre', color='cornflowerblue', linestyle='dashed', label='inflow')
+        ax[0].step(df.index, df.inflow, where='post', color='cornflowerblue', linestyle='dashed', label='inflow')
         ax[0].step(df.index, df.storage, where='post', color='blue', linestyle='solid', label='storage')
         ax[1].set_title('outflows')
         ax[1].set_xlabel('date')

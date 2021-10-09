@@ -10,6 +10,7 @@
 
 # TODO: #10 Active/inacive boolean switch
 # TODO: #11 Test if max_release(volume) function allows for tainter gate like releases.
+# TODO: #16 Turn into dataclass by making setters static functions
 #endregion
 
 # region Dependencies

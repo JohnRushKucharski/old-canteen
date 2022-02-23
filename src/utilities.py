@@ -259,7 +259,7 @@ def af_to_cf(x: float) -> float:
     Converts acre feet to cubic feet
     
     Args:
-        x (float): volumne in acre feet
+        x (float): volume in acre feet
     
     Returns
         volume (float) in cubic feet
@@ -298,6 +298,50 @@ def cm_to_cf(x: float) -> float:
         volume (float) in cubic feet
     '''
     return x * 35.3147
+def cm_to_l(x: float) -> float:
+    '''
+    Converts cubic meter to liter
+    
+    Args:
+        x (float): volume in cubic meters
+        
+    Returns:
+        volume (float): in liters
+    '''
+    return x * 1000
+def l_to_cm(x: float) -> float:
+    '''
+    Converts liters to cubic meters
+    
+    Args:
+        x (float): volume in liters
+        
+    Returns:
+        volume (float): in cubic meters
+    '''
+    return x / 1000
+def af_to_l(x: float) -> float:
+    '''
+    Converts af to liters
+    
+    Args:
+        x (float): a volume in acre-feet
+        
+    Returns:
+        the volume in liters
+    '''
+    return x * af_to_cf(1) * cf_to_cm(1) * cm_to_l(1)
+def l_to_af(x: float) -> float:
+    '''
+    Converts liters to af
+    
+    Args:
+        x (float): a volume in liters
+        
+    Returns:
+        the volume in acre-feet
+    '''
+    return x * l_to_cm(1) * cm_to_cf(1) * cf_to_af(1)
 def taf_to_cm(x: float) -> float:
     '''
     Converts thousands of acre feet to cubic meters

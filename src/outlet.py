@@ -35,7 +35,7 @@ class Outlet:
         self._errors = []
         # w/ validation logic
         self._is_valid = True
-        self._location = self.__set_location(location)
+        self._location = self.__set_location(float(location))
         self._f_max_release = self.__set_f_max_release(f_max_release)     
     
     @property

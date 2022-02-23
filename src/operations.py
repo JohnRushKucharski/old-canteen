@@ -23,7 +23,7 @@ import datetime
 import numpy as np
 
 sys.path.insert(0, '/Users/johnkucharski/Documents/source/canteen')
-from src.data import Input
+from src.data import Input, Category, TimeStep
 from src.outlet import Outlet
 import src.utilities as utilities
 #endregion
@@ -40,12 +40,12 @@ class Operations(Protocol):
     '''
     Provides an interface for classes used to define reservoir operations.
     '''
-    def operate(input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+    def operate(t: TimeStep, outlets: List[Outlet]) -> Dict[str, float]:
         '''
         A function used to operate the reservoir, and required by Simulation objects.
         
         Args:
-            Input [data.Input]: data inputs for a single timestep
+            Input [Dict[str, Input]]: data inputs for a single timestep
             outlets [List[Outlet]]: outlets from which releases are made
             
         Returns:
@@ -142,12 +142,12 @@ class Rule_Curve:
                         xs, ys = [self.days[i - 1], self.days[i]], [self.targets[i - 1], self.targets[i]]
                         break
             return self._interpolator(dowy, xs, ys)
-    def operate(self, input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+    def operate(self, t: TimeStep, outlets: List[Outlet]) -> Dict[str, float]:
         '''
         Makes release to achieve a target elevation based on the input storage and inflow, subject to constraints posed by the outlets.
         
         Args:
-            input [Input]: data inputs used for operational rules
+            input [TimeStep]: data inputs used for operational rules
             outlets [List[Outlet]]: outlets from which releases are made.
         Returns:
             A Dict[str, float] with releases (values) labeled according the Outlet.name from which they are made.
@@ -156,8 +156,9 @@ class Rule_Curve:
         releases = {}
         outlets.sort(key=lambda x: x.location)
         dowy: int = utilities.datetime_to_dowy(input.date)
-        storage, release = input.storage + input.inflow, 0
-        target_release: float = input.storage + input.inflow - self.target_volume(dowy) 
+        release = 0
+        storage = t.inflows() + t.storage() - t.outflows()
+        target_release: float = storage - self.target_volume(dowy) 
         for outlet in outlets:
             if target_release > 0 and storage > 0:
                 release = min(target_release, outlet.max_release)
@@ -183,50 +184,52 @@ class Rules(ABC):
         self._rules.append(rule)        
     
     @abstractmethod
-    def operate(self, input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+    def operate(self, t: TimeStep, outlets: List[Outlet]) -> Dict[str, float]:
         pass
                 
-def passive_operations(input: Input, outlets: List[Outlet], factor: float = 1) -> Dict[str, float]:
+def passive_operations(t: TimeStep, outlets: List[Outlet], factor: float = 1) -> Dict[str, float]:
     '''
     An operations policy that makes the maximum possible release given the storage, inflows (from the input argument) given contraints posed by the outlets.
     
     Args: 
-        input [Input]: data inputs for the operations.
+        input [Dict[str, Input]]: data inputs for the operations.
         outlets [List[Outlet]]: a list of reservoir outlets from which releases are made.
     Return:
         A Dict[str, float] releases (values) listed according to the Outlet.name (key) from which they are made.
     '''
     releases = {}
     outlets.sort(key=lambda x: x.location)
-    stored, released = input.storage + input.inflow, 0
+    release = 0
+    storage = t.inflows() + t.storage() - t.outflows()
     for outlet in outlets:
-        released += outlet.max_release(stored)
-        releases[outlet.name] = released
-        stored = stored - released
+        release = outlet.max_release(storage)
+        releases[outlet.name] = release
+        storage = storage - release
     return releases
         
-def standard_operating_proceedures(input: Input, outlets: List[Outlet]) -> Dict[str, float]:
+def standard_operating_proceedures(t: TimeStep, outlets: List[Outlet]) -> Dict[str, float]:
     '''
     Implements standard operationg proceedure reservoir operations rules, meaning the demanded water is released, provided it is available as storage + inflow.
     NOTE: requires demand and reservoir capacity be listed in the inputs argument as input.additional_inputs under the keys: ['demand', 'capacity']
     
     Args:
-        input [Input]: data inputs for the operational rules. MUST include the input.additional_inputs: ['demand', 'capacity'].
+        input [Dict[str, Input]]: data inputs for the operational rules. MUST include the input.additional_inputs: ['demand', 'capacity'].
         outlets [List[Outlet]]: a list of outlets from which releases are made.
     Returns:
         A Dict[str, float]: listing releases (values) according to the Outlet.name (key) from which they are made.
     '''
     # TODO: #9 Test standard_operating_proceedures() function
     releases = {}
-    stored, release = input.storage, 0
+    release = 0
+    storage = t.inflows() + t.storage() - t.outflows()
     demand, capacity = input.additional_inputs['demand'], input.additional_inputs['capacity']
-    target = max(demand, stored - capacity) if capacity < stored else min(stored, demand)
+    target = max(demand, storage - capacity) if capacity < storage else min(storage, demand)
     outlets.sort(key=lambda x: x.location)
     for outlet in outlets:
         if target > 0:
-            release = min(demand, outlet.max_release(stored))
+            release = min(demand, outlet.max_release(storage))
             releases[outlet.name] = release
-            stored = stored - release
+            storage = storage - release
         else:
             releases[outlet.name] = release
     return releases           
